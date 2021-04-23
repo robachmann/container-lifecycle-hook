@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: container-lifecycle-hook
+  name: container-lifecycle-hook
+  namespace: container-lifecycle-hook
+spec:
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      app: container-lifecycle-hook
+  template:
+    metadata:
+      labels:
+        app: container-lifecycle-hook
+    spec:
+      containers:
+        - image: robachmann/httpie-jq:1.0.0
+          name: container-lifecycle-hook
+          resources:
+            requests:
+              cpu: 100m
+              memory: 44Mi
+            limits:
+              memory: 44Mi
+          command: [ "/bin/sh", "-c", "/opt/scripts/createRequests.sh; trap : TERM INT; sleep 9999999999d & wait" ]
+          envFrom:
+            - secretRef:
+                name: secret-config
+          env:
+            - name: KUBERNETES_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBERNETES_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KUBERNETES_NODE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: KUBERNETES_POD_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: KUBERNETES_SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+          volumeMounts:
+            - name: scripts
+              mountPath: /opt/scripts
+            - name: files
+              mountPath: /opt/files
+          lifecycle:
+            postStart:
+              exec:
+                command: [ "/bin/sh", "-c", "/opt/scripts/postStart.sh" ]
+            preStop:
+              exec:
+                command: [ "/bin/sh", "-c", "/opt/scripts/preStop.sh" ]
+      volumes:
+        - name: scripts
+          configMap:
+            name: scripts
+            defaultMode: 0777
+        - name: files
+          emptyDir: { }
